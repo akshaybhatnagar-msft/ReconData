@@ -1,5 +1,6 @@
 package com.smsdelete.app
 
+import android.graphics.Typeface
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -17,7 +18,10 @@ class ThreadListAdapter(
 
         fun bind(thread: ThreadSummary) {
             binding.tvAddress.text = thread.displayName
-            // If displayName came from contacts, also show the underlying number
+            binding.tvAddress.setTypeface(
+                null,
+                if (thread.unreadCount > 0) Typeface.BOLD else Typeface.NORMAL
+            )
             if (thread.displayName != thread.address && thread.address.isNotBlank()) {
                 binding.tvSubAddress.visibility = View.VISIBLE
                 binding.tvSubAddress.text = thread.address
@@ -27,10 +31,21 @@ class ThreadListAdapter(
             binding.tvLastBody.text = thread.lastBody.take(140).let {
                 if (thread.lastBody.length > 140) "$it…" else it
             }
+            binding.tvLastBody.setTypeface(
+                null,
+                if (thread.unreadCount > 0) Typeface.BOLD else Typeface.NORMAL
+            )
             binding.tvLastDate.text = SmsHelper.formatDate(thread.lastDateMs)
             binding.tvCount.text = itemView.resources.getQuantityString(
                 R.plurals.thread_message_count, thread.count, thread.count
             )
+            if (thread.unreadCount > 0) {
+                binding.tvUnread.visibility = View.VISIBLE
+                binding.tvUnread.text = if (thread.unreadCount > 99) "99+"
+                                        else thread.unreadCount.toString()
+            } else {
+                binding.tvUnread.visibility = View.GONE
+            }
             binding.root.setOnClickListener { onClick(thread) }
         }
     }

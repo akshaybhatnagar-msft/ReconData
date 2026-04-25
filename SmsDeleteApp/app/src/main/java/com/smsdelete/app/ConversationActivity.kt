@@ -1,8 +1,16 @@
 package com.smsdelete.app
 
 import android.app.role.RoleManager
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.database.ContentObserver
+import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.provider.Telephony
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.Menu
@@ -18,6 +26,10 @@ import com.smsdelete.app.databinding.ActivityConversationBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 class ConversationActivity : AppCompatActivity() {
 
@@ -27,11 +39,20 @@ class ConversationActivity : AppCompatActivity() {
     private var titleLabel: String = ""
     private var address: String = ""
 
-    /** Most recent duration index chosen in the delete dialog. */
     private var lastDeleteIndex: Int = 0
-
-    /** Once the user confirms a delete and we have to request ROLE_SMS, remember what to delete. */
     private var pendingDeleteMs: Long = 0L
+    private var pendingScrollToBottom: Boolean = true
+
+    private val refreshHandler = Handler(Looper.getMainLooper())
+    private val refreshRunnable = Runnable { refreshMessages(scrollToBottom = pendingScrollToBottom) }
+
+    private val smsObserver = object : ContentObserver(refreshHandler) {
+        override fun onChange(selfChange: Boolean) {
+            // Coalesce rapid bursts of updates into a single refresh.
+            refreshHandler.removeCallbacks(refreshRunnable)
+            refreshHandler.postDelayed(refreshRunnable, 250)
+        }
+    }
 
     private val defaultSmsRoleLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -43,6 +64,15 @@ class ConversationActivity : AppCompatActivity() {
         }
         pendingDeleteMs = 0L
     }
+
+    private val defaultSmsForSingleDelete = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (isDefaultSmsApp()) pendingDeleteEntry?.let { executeDeleteOne(it) }
+        else showToast(getString(R.string.default_app_required))
+        pendingDeleteEntry = null
+    }
+    private var pendingDeleteEntry: SmsEntry? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,7 +91,10 @@ class ConversationActivity : AppCompatActivity() {
             supportActionBar?.subtitle = address
         }
 
-        previewAdapter = SmsPreviewAdapter()
+        previewAdapter = SmsPreviewAdapter(
+            onMessageLongClick = ::onMessageLongClick,
+            onAttachmentClick = ::openImageViewer
+        )
         binding.rvMessages.apply {
             layoutManager = LinearLayoutManager(this@ConversationActivity).apply {
                 stackFromEnd = true
@@ -74,7 +107,23 @@ class ConversationActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        registerObservers()
+        // Mark thread as read off the UI thread (single UPDATE, fast).
+        lifecycleScope.launch(Dispatchers.IO) {
+            SmsHelper.markThreadRead(this@ConversationActivity, threadId)
+        }
         refreshMessages()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        contentResolver.unregisterContentObserver(smsObserver)
+        refreshHandler.removeCallbacks(refreshRunnable)
+    }
+
+    private fun registerObservers() {
+        contentResolver.registerContentObserver(Telephony.Sms.CONTENT_URI, true, smsObserver)
+        contentResolver.registerContentObserver(Telephony.Mms.CONTENT_URI, true, smsObserver)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -115,6 +164,7 @@ class ConversationActivity : AppCompatActivity() {
             }
             if (ok) {
                 binding.etReply.text?.clear()
+                pendingScrollToBottom = true
                 refreshMessages(scrollToBottom = true)
             } else {
                 showToast(getString(R.string.send_failed))
@@ -126,34 +176,104 @@ class ConversationActivity : AppCompatActivity() {
     // ── Messages list ───────────────────────────────────────────────────────
 
     private fun refreshMessages(scrollToBottom: Boolean = true) {
-        binding.progressBar.visibility = View.VISIBLE
         lifecycleScope.launch {
             val messages = withContext(Dispatchers.IO) {
                 SmsHelper.queryAllMessagesByThread(this@ConversationActivity, threadId)
-                    .sortedBy { it.dateMs }  // oldest first → newest at bottom
+                    .sortedBy { it.dateMs }
             }
-            binding.progressBar.visibility = View.GONE
-            updateUI(messages)
-            if (scrollToBottom && messages.isNotEmpty()) {
+            val items = withDayHeaders(messages)
+            updateUI(items)
+            if (scrollToBottom && items.isNotEmpty()) {
                 binding.rvMessages.post {
-                    binding.rvMessages.scrollToPosition(messages.size - 1)
+                    binding.rvMessages.scrollToPosition(items.size - 1)
                 }
             }
         }
     }
 
-    private fun updateUI(messages: List<SmsEntry>) {
-        if (messages.isEmpty()) {
+    private fun updateUI(items: List<MessageItem>) {
+        if (items.isEmpty()) {
             binding.tvEmpty.visibility = View.VISIBLE
             binding.rvMessages.visibility = View.GONE
         } else {
             binding.tvEmpty.visibility = View.GONE
             binding.rvMessages.visibility = View.VISIBLE
-            previewAdapter.submitList(messages)
+            previewAdapter.submitList(items)
         }
     }
 
-    // ── Delete flow ─────────────────────────────────────────────────────────
+    private fun withDayHeaders(messages: List<SmsEntry>): List<MessageItem> {
+        if (messages.isEmpty()) return emptyList()
+        val out = ArrayList<MessageItem>(messages.size + 8)
+        var lastDayKey: String? = null
+        for (m in messages) {
+            val key = dayKey(m.dateMs)
+            if (key != lastDayKey) {
+                out += MessageItem.DayHeader(dayLabel(m.dateMs))
+                lastDayKey = key
+            }
+            out += MessageItem.Message(m)
+        }
+        return out
+    }
+
+    // ── Long press / copy / delete one ─────────────────────────────────────
+
+    private fun onMessageLongClick(entry: SmsEntry) {
+        val items = arrayOf(getString(R.string.action_copy), getString(R.string.action_delete))
+        AlertDialog.Builder(this)
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> copyToClipboard(entry)
+                    1 -> confirmDeleteOne(entry)
+                }
+            }
+            .show()
+    }
+
+    private fun copyToClipboard(entry: SmsEntry) {
+        val clip = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clip.setPrimaryClip(ClipData.newPlainText("message", entry.body))
+        showToast(getString(R.string.copied))
+    }
+
+    private fun confirmDeleteOne(entry: SmsEntry) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.dialog_title)
+            .setMessage(R.string.delete_one_confirm)
+            .setIcon(android.R.drawable.ic_dialog_alert)
+            .setPositiveButton(R.string.delete) { _, _ ->
+                if (isDefaultSmsApp()) {
+                    executeDeleteOne(entry)
+                } else {
+                    pendingDeleteEntry = entry
+                    requestDefaultRoleForSingle()
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun executeDeleteOne(entry: SmsEntry) {
+        lifecycleScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                SmsHelper.deleteOne(this@ConversationActivity, entry.id, entry.isMms)
+            }
+            if (ok) {
+                showToast(resources.getQuantityString(R.plurals.messages_deleted, 1, 1))
+                refreshMessages(scrollToBottom = false)
+            } else {
+                showToast(getString(R.string.delete_failed))
+            }
+        }
+    }
+
+    private fun requestDefaultRoleForSingle() {
+        val rm = getSystemService(Context.ROLE_SERVICE) as RoleManager
+        defaultSmsForSingleDelete.launch(rm.createRequestRoleIntent(RoleManager.ROLE_SMS))
+    }
+
+    // ── Delete window flow ─────────────────────────────────────────────────
 
     private fun showDeleteWindowDialog() {
         val labels = DURATIONS.map { getString(it.labelRes) }.toTypedArray()
@@ -163,13 +283,13 @@ class ConversationActivity : AppCompatActivity() {
             .setSingleChoiceItems(labels, picked) { _, which -> picked = which }
             .setPositiveButton(R.string.delete) { _, _ ->
                 lastDeleteIndex = picked
-                confirmDelete(DURATIONS[picked])
+                confirmDeleteWindow(DURATIONS[picked])
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
     }
 
-    private fun confirmDelete(option: DurationOption) {
+    private fun confirmDeleteWindow(option: DurationOption) {
         val target = titleLabel.ifBlank { address }
         AlertDialog.Builder(this)
             .setTitle(R.string.dialog_title)
@@ -188,8 +308,8 @@ class ConversationActivity : AppCompatActivity() {
     }
 
     private fun isDefaultSmsApp(): Boolean {
-        val roleManager = getSystemService(Context.ROLE_SERVICE) as RoleManager
-        return roleManager.isRoleHeld(RoleManager.ROLE_SMS)
+        val rm = getSystemService(Context.ROLE_SERVICE) as RoleManager
+        return rm.isRoleHeld(RoleManager.ROLE_SMS)
     }
 
     private fun requestDefaultSmsRole() {
@@ -197,32 +317,56 @@ class ConversationActivity : AppCompatActivity() {
             .setTitle(R.string.default_app_title)
             .setMessage(R.string.default_app_message)
             .setPositiveButton(R.string.continue_btn) { _, _ ->
-                val roleManager = getSystemService(Context.ROLE_SERVICE) as RoleManager
-                val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_SMS)
-                defaultSmsRoleLauncher.launch(intent)
+                val rm = getSystemService(Context.ROLE_SERVICE) as RoleManager
+                defaultSmsRoleLauncher.launch(rm.createRequestRoleIntent(RoleManager.ROLE_SMS))
             }
             .setNegativeButton(R.string.cancel) { _, _ -> pendingDeleteMs = 0L }
             .show()
     }
 
     private fun executeDelete(durationMs: Long) {
-        binding.progressBar.visibility = View.VISIBLE
         lifecycleScope.launch {
             val deleted = withContext(Dispatchers.IO) {
                 SmsHelper.deleteMessagesByThread(
                     this@ConversationActivity, threadId, durationMs
                 )
             }
-            binding.progressBar.visibility = View.GONE
-            showToast(
-                resources.getQuantityString(R.plurals.messages_deleted, deleted, deleted)
-            )
+            showToast(resources.getQuantityString(R.plurals.messages_deleted, deleted, deleted))
             refreshMessages(scrollToBottom = false)
         }
     }
 
+    // ── Helpers ─────────────────────────────────────────────────────────────
+
+    private fun openImageViewer(uri: Uri) {
+        startActivity(
+            Intent(this, ImageViewerActivity::class.java)
+                .putExtra(ImageViewerActivity.EXTRA_URI, uri.toString())
+        )
+    }
+
     private fun showToast(msg: String) =
         Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+
+    private fun dayKey(ms: Long): String {
+        val cal = Calendar.getInstance().apply { timeInMillis = ms }
+        return "${cal.get(Calendar.YEAR)}-${cal.get(Calendar.DAY_OF_YEAR)}"
+    }
+
+    private fun dayLabel(ms: Long): String {
+        val now = Calendar.getInstance()
+        val that = Calendar.getInstance().apply { timeInMillis = ms }
+        val sameYear = now.get(Calendar.YEAR) == that.get(Calendar.YEAR)
+        val sameDay = sameYear && now.get(Calendar.DAY_OF_YEAR) == that.get(Calendar.DAY_OF_YEAR)
+        if (sameDay) return getString(R.string.today)
+        val yesterday = now.clone() as Calendar
+        yesterday.add(Calendar.DAY_OF_YEAR, -1)
+        if (sameYear && yesterday.get(Calendar.DAY_OF_YEAR) == that.get(Calendar.DAY_OF_YEAR)) {
+            return getString(R.string.yesterday)
+        }
+        val pattern = if (sameYear) "EEEE, MMM d" else "MMM d, yyyy"
+        return SimpleDateFormat(pattern, Locale.getDefault()).format(Date(ms))
+    }
 
     data class DurationOption(val labelRes: Int, val ms: Long)
 

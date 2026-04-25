@@ -26,9 +26,10 @@ object SmsHelper {
         Uri.parse("content://mms-sms/canonical-addresses")
     private val MMS_PART: Uri = Uri.parse("content://mms/part")
 
-    /** One row per Telephony thread (SMS + MMS). */
+    /** One row per Telephony thread (SMS + MMS), with unread counts. */
     fun queryThreads(context: Context): List<ThreadSummary> {
         val canonicalById = readCanonicalAddresses(context)
+        val unreadByThread = readUnreadCounts(context)
         val resolver = ContactResolver(context)
 
         val results = mutableListOf<ThreadSummary>()
@@ -51,7 +52,7 @@ object SmsHelper {
             val recipsIdx = c.getColumnIndexOrThrow(Telephony.Threads.RECIPIENT_IDS)
             while (c.moveToNext()) {
                 val threadId = c.getLong(idIdx)
-                val dateMs = c.getLong(dateIdx)  // already in ms for the threads table
+                val dateMs = c.getLong(dateIdx)
                 val count = c.getInt(countIdx)
                 val snippet = c.getString(snippetIdx)?.takeIf { it.isNotBlank() }
                     ?: "[no preview]"
@@ -71,11 +72,47 @@ object SmsHelper {
                     displayName = name ?: firstAddr.ifBlank { "(unknown)" },
                     lastBody = snippet,
                     lastDateMs = dateMs,
-                    count = count
+                    count = count,
+                    unreadCount = unreadByThread[threadId] ?: 0
                 )
             }
         }
         return results
+    }
+
+    /** Marks all unread SMS + MMS rows in [threadId] as read+seen. */
+    fun markThreadRead(context: Context, threadId: Long) {
+        try {
+            val v = ContentValues().apply {
+                put(Telephony.Sms.READ, 1)
+                put(Telephony.Sms.SEEN, 1)
+            }
+            context.contentResolver.update(
+                Telephony.Sms.CONTENT_URI, v,
+                "${Telephony.Sms.THREAD_ID} = ? AND ${Telephony.Sms.READ} = 0",
+                arrayOf(threadId.toString())
+            )
+        } catch (_: Exception) { }
+        try {
+            val v = ContentValues().apply {
+                put(Telephony.Mms.READ, 1)
+                put(Telephony.Mms.SEEN, 1)
+            }
+            context.contentResolver.update(
+                Telephony.Mms.CONTENT_URI, v,
+                "${Telephony.Mms.THREAD_ID} = ? AND ${Telephony.Mms.READ} = 0",
+                arrayOf(threadId.toString())
+            )
+        } catch (_: Exception) { }
+    }
+
+    /** Deletes a single SMS (or MMS) row by id. Caller must hold ROLE_SMS. */
+    fun deleteOne(context: Context, id: Long, isMms: Boolean): Boolean {
+        return try {
+            val uri = if (isMms) Telephony.Mms.CONTENT_URI else Telephony.Sms.CONTENT_URI
+            val deleted = context.contentResolver.delete(uri, "_id = ?", arrayOf(id.toString()))
+            deleted > 0
+        } catch (_: Exception) { false }
     }
 
     /** Combined SMS + MMS rows for [threadId] within [durationMs]. */
@@ -294,6 +331,30 @@ object SmsHelper {
             }
         } catch (_: Exception) { }
         return map.mapValues { it.value.toString() }
+    }
+
+    /** thread_id → unread count, summed over SMS + MMS. */
+    private fun readUnreadCounts(context: Context): Map<Long, Int> {
+        val map = HashMap<Long, Int>()
+        fun tally(uri: Uri, threadCol: String, readCol: String) {
+            try {
+                context.contentResolver.query(
+                    uri,
+                    arrayOf(threadCol),
+                    "$readCol = 0",
+                    null, null
+                )?.use { c ->
+                    val tIdx = c.getColumnIndexOrThrow(threadCol)
+                    while (c.moveToNext()) {
+                        val tid = c.getLong(tIdx)
+                        map.merge(tid, 1) { a, b -> a + b }
+                    }
+                }
+            } catch (_: Exception) { }
+        }
+        tally(Telephony.Sms.CONTENT_URI, Telephony.Sms.THREAD_ID, Telephony.Sms.READ)
+        tally(Telephony.Mms.CONTENT_URI, Telephony.Mms.THREAD_ID, Telephony.Mms.READ)
+        return map
     }
 
     /** mms _id → (image part Uri, content-type) for the first image part of each message. */

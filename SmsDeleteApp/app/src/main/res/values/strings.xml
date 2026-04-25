@@ -26,6 +26,24 @@
     <string name="delete_messages_menu">Delete messages</string>
     <string name="delete_window_title">Delete messages from past…</string>
     <string name="attachment_image">Attachment</string>
+    <string name="sent_indicator">Sent</string>
+
+    <string name="action_copy">Copy text</string>
+    <string name="action_delete">Delete message</string>
+    <string name="copied">Copied</string>
+    <string name="delete_one_confirm">Permanently delete this message?</string>
+    <string name="delete_failed">Failed to delete</string>
+
+    <string name="today">Today</string>
+    <string name="yesterday">Yesterday</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="default_app_section">Default SMS app</string>
+    <string name="default_app_held">Shay Message is your default SMS app.</string>
+    <string name="default_app_not_held">Shay Message is not your default SMS app. Set it as default to send and delete messages.</string>
+    <string name="make_default">Set as default</string>
+    <string name="about_section">About</string>
+    <string name="version_label">Version %1$s</string>
     <string name="read_perm_required">SMS read permission is required to scan messages.</string>
     <string name="sender_you">You</string>
     <string name="sender_them">Them</string>

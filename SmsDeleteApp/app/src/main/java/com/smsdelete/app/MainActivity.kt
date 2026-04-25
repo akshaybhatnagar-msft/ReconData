@@ -5,12 +5,18 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.database.ContentObserver
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.ContactsContract
+import android.provider.Telephony
 import android.telephony.PhoneNumberUtils
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContract
@@ -32,14 +38,21 @@ class MainActivity : AppCompatActivity() {
     private var allThreads: List<ThreadSummary> = emptyList()
     private var query: String = ""
 
+    private val refreshHandler = Handler(Looper.getMainLooper())
+    private val refreshRunnable = Runnable { refreshThreads() }
+
+    private val smsObserver = object : ContentObserver(refreshHandler) {
+        override fun onChange(selfChange: Boolean) {
+            refreshHandler.removeCallbacks(refreshRunnable)
+            refreshHandler.postDelayed(refreshRunnable, 250)
+        }
+    }
+
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        if (permissions[Manifest.permission.READ_SMS] == true) {
-            refreshThreads()
-        } else {
-            showToast(getString(R.string.read_perm_required))
-        }
+        if (permissions[Manifest.permission.READ_SMS] == true) refreshThreads()
+        else showToast(getString(R.string.read_perm_required))
     }
 
     private val pickPhone = registerForActivityResult(PickPhoneNumber) { uri ->
@@ -67,7 +80,6 @@ class MainActivity : AppCompatActivity() {
         })
 
         binding.btnPickContact.setOnClickListener { pickPhone.launch(Unit) }
-
         binding.fabCompose.setOnClickListener {
             startActivity(Intent(this, ComposeActivity::class.java))
         }
@@ -78,17 +90,34 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         if (hasReadSmsPermission()) refreshThreads()
+        contentResolver.registerContentObserver(Telephony.Sms.CONTENT_URI, true, smsObserver)
+        contentResolver.registerContentObserver(Telephony.Mms.CONTENT_URI, true, smsObserver)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        contentResolver.unregisterContentObserver(smsObserver)
+        refreshHandler.removeCallbacks(refreshRunnable)
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.main_menu, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
+        R.id.action_settings -> {
+            startActivity(Intent(this, SettingsActivity::class.java)); true
+        }
+        else -> super.onOptionsItemSelected(item)
     }
 
     private fun checkAndRequestPermissions() {
         val needed = REQUIRED_PERMISSIONS.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-        if (needed.isNotEmpty()) {
-            permissionLauncher.launch(needed.toTypedArray())
-        } else {
-            refreshThreads()
-        }
+        if (needed.isNotEmpty()) permissionLauncher.launch(needed.toTypedArray())
+        else refreshThreads()
     }
 
     private fun hasReadSmsPermission() =
@@ -96,6 +125,7 @@ class MainActivity : AppCompatActivity() {
                 PackageManager.PERMISSION_GRANTED
 
     private fun refreshThreads() {
+        if (!hasReadSmsPermission()) return
         binding.progressBar.visibility = View.VISIBLE
         lifecycleScope.launch {
             val threads = withContext(Dispatchers.IO) {
@@ -143,7 +173,6 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    /** Resolve picked contact URI to a phone number, then find a matching thread. */
     private fun onPhonePicked(uri: Uri) {
         val pickedNumber = contentResolver.query(
             uri,
@@ -160,15 +189,11 @@ class MainActivity : AppCompatActivity() {
         if (number.isNullOrBlank()) return
 
         val match = allThreads.firstOrNull { thread ->
-            try {
-                PhoneNumberUtils.compare(thread.address, number)
-            } catch (_: Exception) { false }
+            try { PhoneNumberUtils.compare(thread.address, number) }
+            catch (_: Exception) { false }
         }
-        if (match != null) {
-            openThread(match)
-        } else {
-            showToast(getString(R.string.no_messages_for_contact, name.ifBlank { number }))
-        }
+        if (match != null) openThread(match)
+        else showToast(getString(R.string.no_messages_for_contact, name.ifBlank { number }))
     }
 
     private fun showToast(msg: String) =

@@ -37,6 +37,16 @@
             android:exported="false"
             android:parentActivityName=".MainActivity" />
 
+        <activity
+            android:name=".ImageViewerActivity"
+            android:exported="false"
+            android:parentActivityName=".ConversationActivity" />
+
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity" />
+
         <!--
              Required stubs so Android grants us the ROLE_SMS role.
              Without these four components, the system won't let us become

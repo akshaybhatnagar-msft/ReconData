@@ -69,13 +69,35 @@
             android:maxLines="2"
             android:ellipsize="end" />
 
-        <TextView
-            android:id="@+id/tvCount"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:textAppearance="?attr/textAppearanceLabelSmall"
-            android:textColor="?attr/colorPrimary" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tvCount"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textAppearance="?attr/textAppearanceLabelSmall"
+                android:textColor="?attr/colorPrimary" />
+
+            <TextView
+                android:id="@+id/tvUnread"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="22dp"
+                android:minHeight="22dp"
+                android:gravity="center"
+                android:paddingHorizontal="8dp"
+                android:textAppearance="?attr/textAppearanceLabelSmall"
+                android:textColor="?attr/colorOnPrimary"
+                android:textStyle="bold"
+                android:background="@drawable/bg_unread_badge"
+                android:visibility="gone" />
+        </LinearLayout>
 
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>
