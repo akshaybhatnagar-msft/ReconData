@@ -1,6 +1,7 @@
 package com.smsdelete.app
 
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -15,7 +16,14 @@ class ThreadListAdapter(
         RecyclerView.ViewHolder(binding.root) {
 
         fun bind(thread: ThreadSummary) {
-            binding.tvAddress.text = thread.address
+            binding.tvAddress.text = thread.displayName
+            // If displayName came from contacts, also show the underlying number
+            if (thread.displayName != thread.address && thread.address.isNotBlank()) {
+                binding.tvSubAddress.visibility = View.VISIBLE
+                binding.tvSubAddress.text = thread.address
+            } else {
+                binding.tvSubAddress.visibility = View.GONE
+            }
             binding.tvLastBody.text = thread.lastBody.take(140).let {
                 if (thread.lastBody.length > 140) "$it…" else it
             }
@@ -41,7 +49,7 @@ class ThreadListAdapter(
     companion object {
         private val DIFF = object : DiffUtil.ItemCallback<ThreadSummary>() {
             override fun areItemsTheSame(a: ThreadSummary, b: ThreadSummary) =
-                a.address == b.address
+                a.threadId == b.threadId
             override fun areContentsTheSame(a: ThreadSummary, b: ThreadSummary) = a == b
         }
     }

@@ -20,7 +20,9 @@ class ConversationActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityConversationBinding
     private lateinit var previewAdapter: SmsPreviewAdapter
-    private lateinit var address: String
+    private var threadId: Long = -1L
+    private var titleLabel: String = ""
+    private var address: String = ""
     private var selectedDurationMs: Long = ONE_HOUR_MS
 
     private val defaultSmsRoleLauncher = registerForActivityResult(
@@ -35,13 +37,17 @@ class ConversationActivity : AppCompatActivity() {
         binding = ActivityConversationBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        address = intent.getStringExtra(EXTRA_ADDRESS).orEmpty().also {
-            if (it.isBlank()) { finish(); return }
-        }
+        threadId = intent.getLongExtra(EXTRA_THREAD_ID, -1L)
+        titleLabel = intent.getStringExtra(EXTRA_TITLE).orEmpty()
+        address = intent.getStringExtra(EXTRA_ADDRESS).orEmpty()
+        if (threadId < 0) { finish(); return }
 
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        supportActionBar?.title = address
+        supportActionBar?.title = titleLabel.ifBlank { address }
+        if (titleLabel.isNotBlank() && titleLabel != address && address.isNotBlank()) {
+            supportActionBar?.subtitle = address
+        }
 
         previewAdapter = SmsPreviewAdapter()
         binding.rvMessages.apply {
@@ -82,7 +88,7 @@ class ConversationActivity : AppCompatActivity() {
         binding.btnDelete.isEnabled = false
         lifecycleScope.launch {
             val messages = withContext(Dispatchers.IO) {
-                SmsHelper.queryMessagesForAddress(this@ConversationActivity, address, selectedDurationMs)
+                SmsHelper.queryMessagesByThread(this@ConversationActivity, threadId, selectedDurationMs)
             }
             binding.progressBar.visibility = View.GONE
             updateUI(messages)
@@ -105,10 +111,11 @@ class ConversationActivity : AppCompatActivity() {
     }
 
     private fun confirmAndDelete() {
-        val label = durationLabel(selectedDurationMs)
+        val durationText = durationLabel(selectedDurationMs)
+        val target = titleLabel.ifBlank { address }
         AlertDialog.Builder(this)
             .setTitle(R.string.dialog_title)
-            .setMessage(getString(R.string.dialog_message_for_address, address, label))
+            .setMessage(getString(R.string.dialog_message_for_address, target, durationText))
             .setIcon(android.R.drawable.ic_dialog_alert)
             .setPositiveButton(R.string.delete) { _, _ ->
                 if (isDefaultSmsApp()) executeDelete() else requestDefaultSmsRole()
@@ -140,8 +147,8 @@ class ConversationActivity : AppCompatActivity() {
         binding.btnDelete.isEnabled = false
         lifecycleScope.launch {
             val deleted = withContext(Dispatchers.IO) {
-                SmsHelper.deleteMessagesForAddress(
-                    this@ConversationActivity, address, selectedDurationMs
+                SmsHelper.deleteMessagesByThread(
+                    this@ConversationActivity, threadId, selectedDurationMs
                 )
             }
             binding.progressBar.visibility = View.GONE
@@ -163,6 +170,8 @@ class ConversationActivity : AppCompatActivity() {
     }
 
     companion object {
+        const val EXTRA_THREAD_ID = "extra_thread_id"
+        const val EXTRA_TITLE = "extra_title"
         const val EXTRA_ADDRESS = "extra_address"
         private const val ONE_HOUR_MS = 60 * 60 * 1000L
     }

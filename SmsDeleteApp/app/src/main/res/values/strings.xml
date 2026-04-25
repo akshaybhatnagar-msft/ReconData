@@ -11,6 +11,8 @@
 
     <string name="scanning">Scanning messages…</string>
     <string name="no_conversations">No conversations found</string>
+    <string name="no_match">No matches</string>
+    <string name="search_hint">Search contacts or numbers</string>
     <string name="no_messages_in_window">No messages in this time window</string>
     <string name="read_perm_required">SMS read permission is required to scan messages.</string>
     <string name="sender_you">You</string>

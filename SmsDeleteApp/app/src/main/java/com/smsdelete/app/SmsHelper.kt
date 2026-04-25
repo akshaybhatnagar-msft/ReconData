@@ -16,39 +16,57 @@ object SmsHelper {
         Telephony.Sms.TYPE
     )
 
-    /** One row per unique address — newest body, last activity, and total message count. */
+    /**
+     * One row per Android thread (Telephony.Sms.THREAD_ID), so messages stored under
+     * different address formats for the same contact merge — matching what the system
+     * Messages app shows.
+     */
     fun queryThreads(context: Context): List<ThreadSummary> {
         val cursor = context.contentResolver.query(
             Telephony.Sms.CONTENT_URI,
-            arrayOf(Telephony.Sms.ADDRESS, Telephony.Sms.BODY, Telephony.Sms.DATE),
+            arrayOf(
+                Telephony.Sms.THREAD_ID,
+                Telephony.Sms.ADDRESS,
+                Telephony.Sms.BODY,
+                Telephony.Sms.DATE
+            ),
             null, null,
             "${Telephony.Sms.DATE} DESC"
         ) ?: return emptyList()
 
-        // We rely on DATE DESC ordering: the first row we see for an address is the most recent.
-        val byAddress = LinkedHashMap<String, MutableThread>()
+        val byThread = LinkedHashMap<Long, MutableThread>()
         cursor.use {
-            val addrIdx = it.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
-            val bodyIdx = it.getColumnIndexOrThrow(Telephony.Sms.BODY)
-            val dateIdx = it.getColumnIndexOrThrow(Telephony.Sms.DATE)
+            val tIdx = it.getColumnIndexOrThrow(Telephony.Sms.THREAD_ID)
+            val aIdx = it.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
+            val bIdx = it.getColumnIndexOrThrow(Telephony.Sms.BODY)
+            val dIdx = it.getColumnIndexOrThrow(Telephony.Sms.DATE)
             while (it.moveToNext()) {
-                val address = it.getString(addrIdx)?.takeIf { s -> s.isNotBlank() } ?: continue
-                val existing = byAddress[address]
+                val threadId = it.getLong(tIdx)
+                val address = it.getString(aIdx)?.takeIf { s -> s.isNotBlank() } ?: ""
+                val existing = byThread[threadId]
                 if (existing == null) {
-                    byAddress[address] = MutableThread(
-                        lastBody = it.getString(bodyIdx) ?: "",
-                        lastDateMs = it.getLong(dateIdx),
+                    byThread[threadId] = MutableThread(
+                        lastAddress = address,
+                        lastBody = it.getString(bIdx) ?: "",
+                        lastDateMs = it.getLong(dIdx),
                         count = 1
                     )
                 } else {
+                    if (existing.lastAddress.isBlank() && address.isNotBlank()) {
+                        existing.lastAddress = address
+                    }
                     existing.count += 1
                 }
             }
         }
 
-        return byAddress.map { (addr, t) ->
+        val resolver = ContactResolver(context)
+        return byThread.map { (threadId, t) ->
+            val name = resolver.displayNameFor(t.lastAddress)
             ThreadSummary(
-                address = addr,
+                threadId = threadId,
+                address = t.lastAddress,
+                displayName = name ?: t.lastAddress.ifBlank { "(unknown)" },
                 lastBody = t.lastBody,
                 lastDateMs = t.lastDateMs,
                 count = t.count
@@ -56,16 +74,16 @@ object SmsHelper {
         }
     }
 
-    /** All messages (sent + received) for [address] within the past [durationMs]. */
-    fun queryMessagesForAddress(
+    /** All messages on [threadId] within the past [durationMs]. */
+    fun queryMessagesByThread(
         context: Context,
-        address: String,
+        threadId: Long,
         durationMs: Long
     ): List<SmsEntry> {
         val cutoff = System.currentTimeMillis() - durationMs
         val selection =
-            "${Telephony.Sms.ADDRESS} = ? AND ${Telephony.Sms.DATE} >= ?"
-        val args = arrayOf(address, cutoff.toString())
+            "${Telephony.Sms.THREAD_ID} = ? AND ${Telephony.Sms.DATE} >= ?"
+        val args = arrayOf(threadId.toString(), cutoff.toString())
 
         val results = mutableListOf<SmsEntry>()
         context.contentResolver.query(
@@ -94,18 +112,18 @@ object SmsHelper {
     }
 
     /**
-     * Deletes all messages for [address] within the past [durationMs].
+     * Deletes all messages on [threadId] within the past [durationMs].
      * Caller MUST hold ROLE_SMS or this returns 0.
      */
-    fun deleteMessagesForAddress(
+    fun deleteMessagesByThread(
         context: Context,
-        address: String,
+        threadId: Long,
         durationMs: Long
     ): Int {
         val cutoff = System.currentTimeMillis() - durationMs
         val selection =
-            "${Telephony.Sms.ADDRESS} = ? AND ${Telephony.Sms.DATE} >= ?"
-        val args = arrayOf(address, cutoff.toString())
+            "${Telephony.Sms.THREAD_ID} = ? AND ${Telephony.Sms.DATE} >= ?"
+        val args = arrayOf(threadId.toString(), cutoff.toString())
         return try {
             context.contentResolver.delete(Telephony.Sms.CONTENT_URI, selection, args)
         } catch (e: SecurityException) {
@@ -119,6 +137,7 @@ object SmsHelper {
         SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()).format(Date(ms))
 
     private data class MutableThread(
+        var lastAddress: String,
         var lastBody: String,
         var lastDateMs: Long,
         var count: Int
