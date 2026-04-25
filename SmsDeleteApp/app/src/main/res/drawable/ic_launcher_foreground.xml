@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,20 C35.2,20 20,35.2 20,54 C20,72.8 35.2,88 54,88 C72.8,88 88,72.8 88,54 C88,35.2 72.8,20 54,20Z" />
+    <!-- Trash can icon -->
+    <path
+        android:fillColor="#C62828"
+        android:pathData="M44,38 L64,38 L64,41 L44,41 Z
+                          M47,38 L47,35 L61,35 L61,38 Z
+                          M45,42 L63,42 L61,72 L47,72 Z
+                          M51,45 L50,69 L52,69 L53,45 Z
+                          M55,45 L55,69 L57,69 L57,45 Z" />
+</vector>
