@@ -59,4 +59,7 @@
     <string name="default_app_message">Android requires this app to temporarily become the default SMS app before it can delete messages.\n\nYou can switch back to your preferred app afterwards.</string>
 
     <string name="disclaimer">This app must temporarily become the default SMS app to delete messages. No messages are sent or read beyond what is shown above.</string>
+
+    <string name="notif_channel_name">Messages</string>
+    <string name="notif_channel_desc">Incoming SMS</string>
 </resources>
