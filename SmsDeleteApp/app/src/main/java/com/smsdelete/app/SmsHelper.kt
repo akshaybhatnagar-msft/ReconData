@@ -151,22 +151,36 @@ object SmsHelper {
         }
 
         if (mmsRows.isNotEmpty()) {
-            val bodies = readMmsTextBodies(context, mmsRows.map { it.id })
+            val ids = mmsRows.map { it.id }
+            val bodies = readMmsTextBodies(context, ids)
+            val attachments = readMmsImageAttachments(context, ids)
             for (row in mmsRows) {
                 val text = bodies[row.id].orEmpty()
+                val att = attachments[row.id]
+                val body = when {
+                    text.isNotBlank() -> text
+                    att != null       -> ""
+                    else              -> "[MMS]"
+                }
                 merged += SmsEntry(
                     id = row.id,
                     address = "",
-                    body = if (text.isBlank()) "[MMS]" else text,
+                    body = body,
                     dateMs = row.dateMs,
                     isSent = row.isSent,
-                    isMms = true
+                    isMms = true,
+                    attachmentUri = att?.first,
+                    attachmentMime = att?.second
                 )
             }
         }
 
         return merged.sortedByDescending { it.dateMs }
     }
+
+    /** Same as [queryMessagesByThread] but with no time filter — returns the entire thread. */
+    fun queryAllMessagesByThread(context: Context, threadId: Long): List<SmsEntry> =
+        queryMessagesByThread(context, threadId, durationMs = System.currentTimeMillis())
 
     /**
      * Deletes SMS + MMS for [threadId] within [durationMs]. Returns total rows deleted.
@@ -280,5 +294,34 @@ object SmsHelper {
             }
         } catch (_: Exception) { }
         return map.mapValues { it.value.toString() }
+    }
+
+    /** mms _id → (image part Uri, content-type) for the first image part of each message. */
+    private fun readMmsImageAttachments(
+        context: Context,
+        ids: List<Long>
+    ): Map<Long, Pair<Uri, String>> {
+        if (ids.isEmpty()) return emptyMap()
+        val placeholders = ids.joinToString(",") { "?" }
+        val args = ids.map { it.toString() }.toTypedArray()
+        val map = HashMap<Long, Pair<Uri, String>>()
+        try {
+            context.contentResolver.query(
+                MMS_PART,
+                arrayOf("_id", "mid", "ct"),
+                "mid IN ($placeholders) AND ct LIKE 'image/%'",
+                args,
+                null
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    val partId = c.getLong(0)
+                    val mid = c.getLong(1)
+                    if (map.containsKey(mid)) continue
+                    val ct = c.getString(2) ?: "image/*"
+                    map[mid] = Uri.parse("content://mms/part/$partId") to ct
+                }
+            }
+        } catch (_: Exception) { }
+        return map
     }
 }

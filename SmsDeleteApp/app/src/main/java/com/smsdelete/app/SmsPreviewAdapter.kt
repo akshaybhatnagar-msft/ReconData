@@ -1,7 +1,10 @@
 package com.smsdelete.app
 
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
+import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -13,20 +16,31 @@ class SmsPreviewAdapter :
 
     inner class ReceivedViewHolder(private val binding: ItemMessageReceivedBinding) :
         RecyclerView.ViewHolder(binding.root) {
-
-        fun bind(entry: SmsEntry) {
-            binding.tvBody.text = formatBody(entry)
-            binding.tvDate.text = SmsHelper.formatDate(entry.dateMs)
-        }
+        fun bind(entry: SmsEntry) =
+            bindCommon(entry, binding.ivAttachment, binding.tvBody, binding.tvDate)
     }
 
     inner class SentViewHolder(private val binding: ItemMessageSentBinding) :
         RecyclerView.ViewHolder(binding.root) {
+        fun bind(entry: SmsEntry) =
+            bindCommon(entry, binding.ivAttachment, binding.tvBody, binding.tvDate)
+    }
 
-        fun bind(entry: SmsEntry) {
-            binding.tvBody.text = formatBody(entry)
-            binding.tvDate.text = SmsHelper.formatDate(entry.dateMs)
+    private fun bindCommon(entry: SmsEntry, image: ImageView, body: TextView, date: TextView) {
+        if (entry.attachmentUri != null) {
+            image.visibility = View.VISIBLE
+            image.setImageURI(entry.attachmentUri)
+        } else {
+            image.visibility = View.GONE
+            image.setImageDrawable(null)
         }
+        if (entry.body.isBlank()) {
+            body.visibility = View.GONE
+        } else {
+            body.visibility = View.VISIBLE
+            body.text = entry.body
+        }
+        date.text = SmsHelper.formatDate(entry.dateMs)
     }
 
     override fun getItemViewType(position: Int): Int =
@@ -47,13 +61,6 @@ class SmsPreviewAdapter :
             is SentViewHolder     -> holder.bind(entry)
             is ReceivedViewHolder -> holder.bind(entry)
         }
-    }
-
-    private fun formatBody(entry: SmsEntry): String {
-        val prefix = if (entry.isMms) "📎 " else ""
-        val body = entry.body
-        val combined = (prefix + body).take(160 + prefix.length)
-        return if (body.length > 160) "$combined…" else combined
     }
 
     companion object {

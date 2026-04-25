@@ -19,10 +19,22 @@
         android:paddingTop="10dp"
         android:paddingBottom="10dp">
 
+        <ImageView
+            android:id="@+id/ivAttachment"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:adjustViewBounds="true"
+            android:maxWidth="260dp"
+            android:maxHeight="380dp"
+            android:scaleType="fitCenter"
+            android:contentDescription="@string/attachment_image"
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/tvBody"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="0dp"
             android:textAppearance="?attr/textAppearanceBodyMedium"
             android:textColor="?attr/colorOnSurface" />
 

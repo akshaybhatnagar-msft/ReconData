@@ -22,6 +22,10 @@
     <string name="no_match">No matches</string>
     <string name="search_hint">Search contacts or numbers</string>
     <string name="no_messages_in_window">No messages in this time window</string>
+    <string name="no_messages_in_thread">No messages</string>
+    <string name="delete_messages_menu">Delete messages</string>
+    <string name="delete_window_title">Delete messages from past…</string>
+    <string name="attachment_image">Attachment</string>
     <string name="read_perm_required">SMS read permission is required to scan messages.</string>
     <string name="sender_you">You</string>
     <string name="sender_them">Them</string>

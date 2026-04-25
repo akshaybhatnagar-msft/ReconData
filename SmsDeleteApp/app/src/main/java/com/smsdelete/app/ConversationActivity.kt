@@ -5,9 +5,9 @@ import android.content.Context
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.Menu
 import android.view.MenuItem
 import android.view.View
-import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -26,13 +26,22 @@ class ConversationActivity : AppCompatActivity() {
     private var threadId: Long = -1L
     private var titleLabel: String = ""
     private var address: String = ""
-    private var selectedIndex: Int = 0  // index into DURATIONS
+
+    /** Most recent duration index chosen in the delete dialog. */
+    private var lastDeleteIndex: Int = 0
+
+    /** Once the user confirms a delete and we have to request ROLE_SMS, remember what to delete. */
+    private var pendingDeleteMs: Long = 0L
 
     private val defaultSmsRoleLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
-        if (isDefaultSmsApp()) executeDelete()
-        else showToast(getString(R.string.default_app_required))
+        if (isDefaultSmsApp() && pendingDeleteMs > 0) {
+            executeDelete(pendingDeleteMs)
+        } else if (pendingDeleteMs > 0) {
+            showToast(getString(R.string.default_app_required))
+        }
+        pendingDeleteMs = 0L
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -54,22 +63,38 @@ class ConversationActivity : AppCompatActivity() {
 
         previewAdapter = SmsPreviewAdapter()
         binding.rvMessages.apply {
-            layoutManager = LinearLayoutManager(this@ConversationActivity)
+            layoutManager = LinearLayoutManager(this@ConversationActivity).apply {
+                stackFromEnd = true
+            }
             adapter = previewAdapter
         }
 
-        setupDurationDropdown()
         setupReplyBar()
-        binding.btnDelete.setOnClickListener { confirmAndDelete() }
     }
+
+    override fun onResume() {
+        super.onResume()
+        refreshMessages()
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.conversation_menu, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
+        android.R.id.home -> { finish(); true }
+        R.id.action_delete_messages -> { showDeleteWindowDialog(); true }
+        else -> super.onOptionsItemSelected(item)
+    }
+
+    // ── Reply bar ───────────────────────────────────────────────────────────
 
     private fun setupReplyBar() {
         binding.etReply.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                updateSendEnabled()
-            }
+            override fun afterTextChanged(s: Editable?) { updateSendEnabled() }
         })
         updateSendEnabled()
         binding.btnSend.setOnClickListener { sendReply() }
@@ -90,7 +115,7 @@ class ConversationActivity : AppCompatActivity() {
             }
             if (ok) {
                 binding.etReply.text?.clear()
-                refreshPreview()
+                refreshMessages(scrollToBottom = true)
             } else {
                 showToast(getString(R.string.send_failed))
             }
@@ -98,68 +123,65 @@ class ConversationActivity : AppCompatActivity() {
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        refreshPreview()
-    }
+    // ── Messages list ───────────────────────────────────────────────────────
 
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        if (item.itemId == android.R.id.home) {
-            finish(); return true
-        }
-        return super.onOptionsItemSelected(item)
-    }
-
-    private fun setupDurationDropdown() {
-        val labels = DURATIONS.map { getString(it.labelRes) }
-        val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, labels)
-        binding.durationDropdown.setAdapter(adapter)
-        // Default selection
-        binding.durationDropdown.setText(labels[selectedIndex], false)
-        binding.durationDropdown.setOnItemClickListener { _, _, position, _ ->
-            selectedIndex = position
-            refreshPreview()
-        }
-    }
-
-    private fun selectedDurationMs(): Long = DURATIONS[selectedIndex].ms
-    private fun selectedDurationLabel(): String = getString(DURATIONS[selectedIndex].labelRes)
-
-    private fun refreshPreview() {
+    private fun refreshMessages(scrollToBottom: Boolean = true) {
         binding.progressBar.visibility = View.VISIBLE
-        binding.btnDelete.isEnabled = false
         lifecycleScope.launch {
             val messages = withContext(Dispatchers.IO) {
-                SmsHelper.queryMessagesByThread(this@ConversationActivity, threadId, selectedDurationMs())
+                SmsHelper.queryAllMessagesByThread(this@ConversationActivity, threadId)
+                    .sortedBy { it.dateMs }  // oldest first → newest at bottom
             }
             binding.progressBar.visibility = View.GONE
             updateUI(messages)
+            if (scrollToBottom && messages.isNotEmpty()) {
+                binding.rvMessages.post {
+                    binding.rvMessages.scrollToPosition(messages.size - 1)
+                }
+            }
         }
     }
 
     private fun updateUI(messages: List<SmsEntry>) {
-        val count = messages.size
-        if (count == 0) {
-            binding.tvMessageCount.text = getString(R.string.no_messages_in_window)
+        if (messages.isEmpty()) {
+            binding.tvEmpty.visibility = View.VISIBLE
             binding.rvMessages.visibility = View.GONE
         } else {
-            binding.tvMessageCount.text = resources.getQuantityString(
-                R.plurals.messages_found, count, count
-            )
+            binding.tvEmpty.visibility = View.GONE
             binding.rvMessages.visibility = View.VISIBLE
             previewAdapter.submitList(messages)
         }
-        binding.btnDelete.isEnabled = count > 0
     }
 
-    private fun confirmAndDelete() {
+    // ── Delete flow ─────────────────────────────────────────────────────────
+
+    private fun showDeleteWindowDialog() {
+        val labels = DURATIONS.map { getString(it.labelRes) }.toTypedArray()
+        var picked = lastDeleteIndex
+        AlertDialog.Builder(this)
+            .setTitle(R.string.delete_window_title)
+            .setSingleChoiceItems(labels, picked) { _, which -> picked = which }
+            .setPositiveButton(R.string.delete) { _, _ ->
+                lastDeleteIndex = picked
+                confirmDelete(DURATIONS[picked])
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun confirmDelete(option: DurationOption) {
         val target = titleLabel.ifBlank { address }
         AlertDialog.Builder(this)
             .setTitle(R.string.dialog_title)
-            .setMessage(getString(R.string.dialog_message_for_address, target, selectedDurationLabel()))
+            .setMessage(getString(R.string.dialog_message_for_address, target, getString(option.labelRes)))
             .setIcon(android.R.drawable.ic_dialog_alert)
             .setPositiveButton(R.string.delete) { _, _ ->
-                if (isDefaultSmsApp()) executeDelete() else requestDefaultSmsRole()
+                if (isDefaultSmsApp()) {
+                    executeDelete(option.ms)
+                } else {
+                    pendingDeleteMs = option.ms
+                    requestDefaultSmsRole()
+                }
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
@@ -179,31 +201,30 @@ class ConversationActivity : AppCompatActivity() {
                 val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_SMS)
                 defaultSmsRoleLauncher.launch(intent)
             }
-            .setNegativeButton(R.string.cancel, null)
+            .setNegativeButton(R.string.cancel) { _, _ -> pendingDeleteMs = 0L }
             .show()
     }
 
-    private fun executeDelete() {
+    private fun executeDelete(durationMs: Long) {
         binding.progressBar.visibility = View.VISIBLE
-        binding.btnDelete.isEnabled = false
         lifecycleScope.launch {
             val deleted = withContext(Dispatchers.IO) {
                 SmsHelper.deleteMessagesByThread(
-                    this@ConversationActivity, threadId, selectedDurationMs()
+                    this@ConversationActivity, threadId, durationMs
                 )
             }
             binding.progressBar.visibility = View.GONE
             showToast(
                 resources.getQuantityString(R.plurals.messages_deleted, deleted, deleted)
             )
-            refreshPreview()
+            refreshMessages(scrollToBottom = false)
         }
     }
 
     private fun showToast(msg: String) =
         Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
 
-    private data class DurationOption(val labelRes: Int, val ms: Long)
+    data class DurationOption(val labelRes: Int, val ms: Long)
 
     companion object {
         const val EXTRA_THREAD_ID = "extra_thread_id"
