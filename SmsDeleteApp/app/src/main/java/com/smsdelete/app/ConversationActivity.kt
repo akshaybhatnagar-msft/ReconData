@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Bundle
 import android.view.MenuItem
 import android.view.View
+import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -23,7 +24,7 @@ class ConversationActivity : AppCompatActivity() {
     private var threadId: Long = -1L
     private var titleLabel: String = ""
     private var address: String = ""
-    private var selectedDurationMs: Long = ONE_HOUR_MS
+    private var selectedIndex: Int = 0  // index into DURATIONS
 
     private val defaultSmsRoleLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -55,19 +56,7 @@ class ConversationActivity : AppCompatActivity() {
             adapter = previewAdapter
         }
 
-        binding.durationToggleGroup.check(R.id.btn1hour)
-        binding.durationToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
-            if (!isChecked) return@addOnButtonCheckedListener
-            selectedDurationMs = when (checkedId) {
-                R.id.btn30min  -> 30 * 60 * 1000L
-                R.id.btn1hour  -> ONE_HOUR_MS
-                R.id.btn2hours -> 2 * ONE_HOUR_MS
-                R.id.btn2days  -> 48 * ONE_HOUR_MS
-                else           -> ONE_HOUR_MS
-            }
-            refreshPreview()
-        }
-
+        setupDurationDropdown()
         binding.btnDelete.setOnClickListener { confirmAndDelete() }
     }
 
@@ -83,12 +72,27 @@ class ConversationActivity : AppCompatActivity() {
         return super.onOptionsItemSelected(item)
     }
 
+    private fun setupDurationDropdown() {
+        val labels = DURATIONS.map { getString(it.labelRes) }
+        val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, labels)
+        binding.durationDropdown.setAdapter(adapter)
+        // Default selection
+        binding.durationDropdown.setText(labels[selectedIndex], false)
+        binding.durationDropdown.setOnItemClickListener { _, _, position, _ ->
+            selectedIndex = position
+            refreshPreview()
+        }
+    }
+
+    private fun selectedDurationMs(): Long = DURATIONS[selectedIndex].ms
+    private fun selectedDurationLabel(): String = getString(DURATIONS[selectedIndex].labelRes)
+
     private fun refreshPreview() {
         binding.progressBar.visibility = View.VISIBLE
         binding.btnDelete.isEnabled = false
         lifecycleScope.launch {
             val messages = withContext(Dispatchers.IO) {
-                SmsHelper.queryMessagesByThread(this@ConversationActivity, threadId, selectedDurationMs)
+                SmsHelper.queryMessagesByThread(this@ConversationActivity, threadId, selectedDurationMs())
             }
             binding.progressBar.visibility = View.GONE
             updateUI(messages)
@@ -111,11 +115,10 @@ class ConversationActivity : AppCompatActivity() {
     }
 
     private fun confirmAndDelete() {
-        val durationText = durationLabel(selectedDurationMs)
         val target = titleLabel.ifBlank { address }
         AlertDialog.Builder(this)
             .setTitle(R.string.dialog_title)
-            .setMessage(getString(R.string.dialog_message_for_address, target, durationText))
+            .setMessage(getString(R.string.dialog_message_for_address, target, selectedDurationLabel()))
             .setIcon(android.R.drawable.ic_dialog_alert)
             .setPositiveButton(R.string.delete) { _, _ ->
                 if (isDefaultSmsApp()) executeDelete() else requestDefaultSmsRole()
@@ -148,7 +151,7 @@ class ConversationActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val deleted = withContext(Dispatchers.IO) {
                 SmsHelper.deleteMessagesByThread(
-                    this@ConversationActivity, threadId, selectedDurationMs
+                    this@ConversationActivity, threadId, selectedDurationMs()
                 )
             }
             binding.progressBar.visibility = View.GONE
@@ -162,17 +165,29 @@ class ConversationActivity : AppCompatActivity() {
     private fun showToast(msg: String) =
         Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
 
-    private fun durationLabel(ms: Long) = when (ms) {
-        30 * 60 * 1000L -> getString(R.string.duration_30min)
-        ONE_HOUR_MS     -> getString(R.string.duration_1hour)
-        2 * ONE_HOUR_MS -> getString(R.string.duration_2hours)
-        else            -> getString(R.string.duration_2days)
-    }
+    private data class DurationOption(val labelRes: Int, val ms: Long)
 
     companion object {
         const val EXTRA_THREAD_ID = "extra_thread_id"
         const val EXTRA_TITLE = "extra_title"
         const val EXTRA_ADDRESS = "extra_address"
-        private const val ONE_HOUR_MS = 60 * 60 * 1000L
+
+        private const val H = 60L * 60L * 1000L
+        private const val D = 24L * H
+
+        private val DURATIONS = listOf(
+            DurationOption(R.string.duration_1hour,   1L * H),
+            DurationOption(R.string.duration_2hours,  2L * H),
+            DurationOption(R.string.duration_4hours,  4L * H),
+            DurationOption(R.string.duration_6hours,  6L * H),
+            DurationOption(R.string.duration_12hours, 12L * H),
+            DurationOption(R.string.duration_1day,    1L * D),
+            DurationOption(R.string.duration_2days,   2L * D),
+            DurationOption(R.string.duration_3days,   3L * D),
+            DurationOption(R.string.duration_5days,   5L * D),
+            DurationOption(R.string.duration_1week,   7L * D),
+            DurationOption(R.string.duration_2weeks,  14L * D),
+            DurationOption(R.string.duration_1month,  30L * D),
+        )
     }
 }
