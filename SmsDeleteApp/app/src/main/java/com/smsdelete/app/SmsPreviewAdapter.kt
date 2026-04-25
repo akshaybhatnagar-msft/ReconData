@@ -5,41 +5,61 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import com.smsdelete.app.databinding.ItemSmsBinding
+import com.smsdelete.app.databinding.ItemMessageReceivedBinding
+import com.smsdelete.app.databinding.ItemMessageSentBinding
 
-class SmsPreviewAdapter : ListAdapter<SmsEntry, SmsPreviewAdapter.ViewHolder>(DIFF) {
+class SmsPreviewAdapter :
+    ListAdapter<SmsEntry, RecyclerView.ViewHolder>(DIFF) {
 
-    inner class ViewHolder(private val binding: ItemSmsBinding) :
+    inner class ReceivedViewHolder(private val binding: ItemMessageReceivedBinding) :
         RecyclerView.ViewHolder(binding.root) {
 
         fun bind(entry: SmsEntry) {
-            val ctx = itemView.context
-            binding.tvSender.text = when {
-                entry.isSent           -> ctx.getString(R.string.sender_you)
-                entry.address.isNotBlank() -> entry.address
-                else                   -> ctx.getString(R.string.sender_them)
-            }
-            val prefix = if (entry.isMms) "📎 " else ""
-            val body = entry.body
-            binding.tvBody.text = (prefix + body).take(160 + prefix.length).let {
-                if (body.length > 160) "$it…" else it
-            }
+            binding.tvBody.text = formatBody(entry)
             binding.tvDate.text = SmsHelper.formatDate(entry.dateMs)
         }
     }
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val binding = ItemSmsBinding.inflate(
-            LayoutInflater.from(parent.context), parent, false
-        )
-        return ViewHolder(binding)
+    inner class SentViewHolder(private val binding: ItemMessageSentBinding) :
+        RecyclerView.ViewHolder(binding.root) {
+
+        fun bind(entry: SmsEntry) {
+            binding.tvBody.text = formatBody(entry)
+            binding.tvDate.text = SmsHelper.formatDate(entry.dateMs)
+        }
     }
 
-    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(getItem(position))
+    override fun getItemViewType(position: Int): Int =
+        if (getItem(position).isSent) VIEW_TYPE_SENT else VIEW_TYPE_RECEIVED
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        val inflater = LayoutInflater.from(parent.context)
+        return if (viewType == VIEW_TYPE_SENT) {
+            SentViewHolder(ItemMessageSentBinding.inflate(inflater, parent, false))
+        } else {
+            ReceivedViewHolder(ItemMessageReceivedBinding.inflate(inflater, parent, false))
+        }
+    }
+
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        val entry = getItem(position)
+        when (holder) {
+            is SentViewHolder     -> holder.bind(entry)
+            is ReceivedViewHolder -> holder.bind(entry)
+        }
+    }
+
+    private fun formatBody(entry: SmsEntry): String {
+        val prefix = if (entry.isMms) "📎 " else ""
+        val body = entry.body
+        val combined = (prefix + body).take(160 + prefix.length)
+        return if (body.length > 160) "$combined…" else combined
     }
 
     companion object {
+        private const val VIEW_TYPE_RECEIVED = 0
+        private const val VIEW_TYPE_SENT = 1
+
         private val DIFF = object : DiffUtil.ItemCallback<SmsEntry>() {
             override fun areItemsTheSame(a: SmsEntry, b: SmsEntry) =
                 a.id == b.id && a.isMms == b.isMms
