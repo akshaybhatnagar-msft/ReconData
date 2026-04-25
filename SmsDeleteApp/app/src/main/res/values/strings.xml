@@ -63,4 +63,7 @@
     <string name="reply_hint">Message</string>
     <string name="send">Send</string>
     <string name="send_failed">Failed to send message</string>
+
+    <string name="notif_channel_name">Messages</string>
+    <string name="notif_channel_desc">Incoming SMS</string>
 </resources>
