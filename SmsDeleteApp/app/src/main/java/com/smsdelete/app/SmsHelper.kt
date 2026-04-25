@@ -115,6 +115,26 @@ object SmsHelper {
         } catch (_: Exception) { false }
     }
 
+    /** Deletes every SMS + MMS row in [threadId]. Caller must hold ROLE_SMS. */
+    fun deleteEntireThread(context: Context, threadId: Long): Int {
+        var deleted = 0
+        try {
+            deleted += context.contentResolver.delete(
+                Telephony.Sms.CONTENT_URI,
+                "${Telephony.Sms.THREAD_ID} = ?",
+                arrayOf(threadId.toString())
+            )
+        } catch (_: Exception) { }
+        try {
+            deleted += context.contentResolver.delete(
+                Telephony.Mms.CONTENT_URI,
+                "${Telephony.Mms.THREAD_ID} = ?",
+                arrayOf(threadId.toString())
+            )
+        } catch (_: Exception) { }
+        return deleted
+    }
+
     /** Combined SMS + MMS rows for [threadId] within [durationMs]. */
     fun queryMessagesByThread(
         context: Context,

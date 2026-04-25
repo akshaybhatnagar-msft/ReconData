@@ -44,6 +44,9 @@
     <string name="make_default">Set as default</string>
     <string name="about_section">About</string>
     <string name="version_label">Version %1$s</string>
+
+    <string name="action_delete_conversation">Delete conversation</string>
+    <string name="delete_conversation_confirm">Permanently delete the entire conversation with %1$s?</string>
     <string name="read_perm_required">SMS read permission is required to scan messages.</string>
     <string name="sender_you">You</string>
     <string name="sender_them">Them</string>

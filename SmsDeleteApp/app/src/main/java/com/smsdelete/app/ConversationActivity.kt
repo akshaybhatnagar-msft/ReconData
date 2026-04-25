@@ -41,10 +41,20 @@ class ConversationActivity : AppCompatActivity() {
 
     private var lastDeleteIndex: Int = 0
     private var pendingDeleteMs: Long = 0L
-    private var pendingScrollToBottom: Boolean = true
 
     private val refreshHandler = Handler(Looper.getMainLooper())
-    private val refreshRunnable = Runnable { refreshMessages(scrollToBottom = pendingScrollToBottom) }
+    private val refreshRunnable = Runnable {
+        // Smart scroll: only auto-scroll if we were already at the bottom.
+        val lm = binding.rvMessages.layoutManager as? LinearLayoutManager
+        val total = previewAdapter.itemCount
+        val nearBottom = lm == null || total == 0 ||
+            lm.findLastVisibleItemPosition() >= total - 2
+        // Mark new arrivals as read since the user has the thread open.
+        lifecycleScope.launch(Dispatchers.IO) {
+            SmsHelper.markThreadRead(this@ConversationActivity, threadId)
+        }
+        refreshMessages(scrollToBottom = nearBottom)
+    }
 
     private val smsObserver = object : ContentObserver(refreshHandler) {
         override fun onChange(selfChange: Boolean) {
@@ -164,7 +174,6 @@ class ConversationActivity : AppCompatActivity() {
             }
             if (ok) {
                 binding.etReply.text?.clear()
-                pendingScrollToBottom = true
                 refreshMessages(scrollToBottom = true)
             } else {
                 showToast(getString(R.string.send_failed))

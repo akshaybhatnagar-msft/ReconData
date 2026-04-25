@@ -39,15 +39,19 @@ object NotificationHelper {
         val managerCompat = NotificationManagerCompat.from(context)
         if (!managerCompat.areNotificationsEnabled()) return
 
-        val contentIntent = Intent(context, MainActivity::class.java).apply {
+        val contentIntent = Intent(context, ConversationActivity::class.java).apply {
+            putExtra(ConversationActivity.EXTRA_THREAD_ID, threadId)
+            putExtra(ConversationActivity.EXTRA_TITLE, address)
+            putExtra(ConversationActivity.EXTRA_ADDRESS, address)
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
-        val pendingIntent = PendingIntent.getActivity(
-            context,
-            threadId.toInt(),
-            contentIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val pendingIntent = androidx.core.app.TaskStackBuilder.create(context)
+            .addParentStack(ConversationActivity::class.java)
+            .addNextIntent(contentIntent)
+            .getPendingIntent(
+                threadId.toInt(),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)

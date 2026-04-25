@@ -10,7 +10,8 @@ import androidx.recyclerview.widget.RecyclerView
 import com.smsdelete.app.databinding.ItemThreadBinding
 
 class ThreadListAdapter(
-    private val onClick: (ThreadSummary) -> Unit
+    private val onClick: (ThreadSummary) -> Unit,
+    private val onLongClick: (ThreadSummary) -> Unit = {}
 ) : ListAdapter<ThreadSummary, ThreadListAdapter.ViewHolder>(DIFF) {
 
     inner class ViewHolder(private val binding: ItemThreadBinding) :
@@ -47,6 +48,7 @@ class ThreadListAdapter(
                 binding.tvUnread.visibility = View.GONE
             }
             binding.root.setOnClickListener { onClick(thread) }
+            binding.root.setOnLongClickListener { onLongClick(thread); true }
         }
     }
 

@@ -2,6 +2,7 @@ package com.smsdelete.app
 
 import android.Manifest
 import android.app.Activity
+import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -21,6 +22,7 @@ import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
@@ -64,7 +66,10 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        threadAdapter = ThreadListAdapter { thread -> openThread(thread) }
+        threadAdapter = ThreadListAdapter(
+            onClick = { thread -> openThread(thread) },
+            onLongClick = { thread -> onThreadLongClick(thread) }
+        )
         binding.rvThreads.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = threadAdapter
@@ -163,6 +168,59 @@ class MainActivity : AppCompatActivity() {
             threadAdapter.submitList(filtered)
         }
     }
+
+    private fun onThreadLongClick(thread: ThreadSummary) {
+        val target = thread.displayName.ifBlank { thread.address }
+        AlertDialog.Builder(this)
+            .setTitle(target)
+            .setItems(arrayOf(getString(R.string.action_delete_conversation))) { _, which ->
+                if (which == 0) confirmDeleteThread(thread)
+            }
+            .show()
+    }
+
+    private fun confirmDeleteThread(thread: ThreadSummary) {
+        val target = thread.displayName.ifBlank { thread.address }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.dialog_title)
+            .setMessage(getString(R.string.delete_conversation_confirm, target))
+            .setIcon(android.R.drawable.ic_dialog_alert)
+            .setPositiveButton(R.string.delete) { _, _ ->
+                if (isDefaultSmsApp()) executeDeleteThread(thread)
+                else {
+                    pendingThreadToDelete = thread
+                    val rm = getSystemService(Context.ROLE_SERVICE) as RoleManager
+                    defaultSmsForThreadDelete.launch(rm.createRequestRoleIntent(RoleManager.ROLE_SMS))
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun executeDeleteThread(thread: ThreadSummary) {
+        lifecycleScope.launch {
+            val deleted = withContext(Dispatchers.IO) {
+                SmsHelper.deleteEntireThread(this@MainActivity, thread.threadId)
+            }
+            showToast(resources.getQuantityString(R.plurals.messages_deleted, deleted, deleted))
+            refreshThreads()
+        }
+    }
+
+    private fun isDefaultSmsApp(): Boolean {
+        val rm = getSystemService(Context.ROLE_SERVICE) as RoleManager
+        return rm.isRoleHeld(RoleManager.ROLE_SMS)
+    }
+
+    private val defaultSmsForThreadDelete = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        val pending = pendingThreadToDelete
+        pendingThreadToDelete = null
+        if (pending != null && isDefaultSmsApp()) executeDeleteThread(pending)
+        else if (pending != null) showToast(getString(R.string.default_app_required))
+    }
+    private var pendingThreadToDelete: ThreadSummary? = null
 
     private fun openThread(thread: ThreadSummary) {
         startActivity(
