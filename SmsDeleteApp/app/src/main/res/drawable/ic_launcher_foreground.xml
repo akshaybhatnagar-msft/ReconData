@@ -4,15 +4,12 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Chat bubble -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M54,20 C35.2,20 20,35.2 20,54 C20,72.8 35.2,88 54,88 C72.8,88 88,72.8 88,54 C88,35.2 72.8,20 54,20Z" />
-    <!-- Trash can icon -->
+        android:pathData="M30,32 L78,32 C82.4,32 86,35.6 86,40 L86,66 C86,70.4 82.4,74 78,74 L56,74 L46,84 L46,74 L30,74 C25.6,74 22,70.4 22,66 L22,40 C22,35.6 25.6,32 30,32 Z" />
+    <!-- Letter S inside bubble -->
     <path
-        android:fillColor="#C62828"
-        android:pathData="M44,38 L64,38 L64,41 L44,41 Z
-                          M47,38 L47,35 L61,35 L61,38 Z
-                          M45,42 L63,42 L61,72 L47,72 Z
-                          M51,45 L50,69 L52,69 L53,45 Z
-                          M55,45 L55,69 L57,69 L57,45 Z" />
+        android:fillColor="#6750A4"
+        android:pathData="M48,46 C48,44 50,42 53,42 L60,42 C62,42 63,43 63,45 C63,47 62,48 60,48 L52,48 C49,48 47,50 47,53 C47,56 49,58 52,58 L60,58 C61,58 62,59 62,60 C62,61 61,62 60,62 L48,62 C46,62 45,63 45,65 C45,67 46,68 48,68 L60,68 C65,68 68,65 68,60 C68,57 66,55 64,54 C66,53 67,51 67,48 C67,43 64,40 59,40 L51,40 C46,40 43,43 43,48 L48,46 Z" />
 </vector>

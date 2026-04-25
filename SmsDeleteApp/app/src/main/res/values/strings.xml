@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">SMS Delete</string>
-    <string name="threads_subtitle">Pick a conversation to delete its messages from a time window</string>
+    <string name="app_name">Shay Message</string>
+    <string name="threads_subtitle">Your conversations</string>
     <string name="select_window">Delete messages from the past…</string>
 
     <string name="duration_1hour">1 hour</string>
