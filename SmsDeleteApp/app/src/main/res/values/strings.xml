@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SMS Delete</string>
-    <string name="subtitle">Select a time window to delete received messages</string>
+    <string name="threads_subtitle">Pick a conversation to delete its messages from a time window</string>
     <string name="select_window">Delete messages from the past…</string>
 
     <string name="duration_30min">30 min</string>
@@ -10,7 +10,13 @@
     <string name="duration_2days">2 days</string>
 
     <string name="scanning">Scanning messages…</string>
-    <string name="no_messages_found">No received messages found in this window</string>
+    <string name="no_conversations">No conversations found</string>
+    <string name="no_messages_in_window">No messages in this time window</string>
+    <string name="read_perm_required">SMS read permission is required to scan messages.</string>
+    <string name="sender_you">You</string>
+    <string name="sender_unknown">Unknown</string>
+    <string name="default_app_required">Default SMS app permission is needed to delete messages.</string>
+
     <plurals name="messages_found">
         <item quantity="one">%d message will be deleted</item>
         <item quantity="other">%d messages will be deleted</item>
@@ -19,6 +25,14 @@
         <item quantity="one">Deleted %d message</item>
         <item quantity="other">Deleted %d messages</item>
     </plurals>
+    <plurals name="conversations_count">
+        <item quantity="one">%d conversation</item>
+        <item quantity="other">%d conversations</item>
+    </plurals>
+    <plurals name="thread_message_count">
+        <item quantity="one">%d message</item>
+        <item quantity="other">%d messages</item>
+    </plurals>
 
     <string name="delete_btn">Delete Messages</string>
     <string name="cancel">Cancel</string>
@@ -26,7 +40,7 @@
     <string name="continue_btn">Continue</string>
 
     <string name="dialog_title">Confirm Deletion</string>
-    <string name="dialog_message">Permanently delete all received SMS messages from the past %s?</string>
+    <string name="dialog_message_for_address">Permanently delete messages with %1$s from the past %2$s?</string>
 
     <string name="default_app_title">Default SMS App Required</string>
     <string name="default_app_message">Android requires this app to temporarily become the default SMS app before it can delete messages.\n\nYou can switch back to your preferred app afterwards.</string>

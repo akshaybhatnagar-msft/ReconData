@@ -26,6 +26,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ConversationActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity" />
+
         <!--
              Required stubs so Android grants us the ROLE_SMS role.
              Without these four components, the system won't let us become

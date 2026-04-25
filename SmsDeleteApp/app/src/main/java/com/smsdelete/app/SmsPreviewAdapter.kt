@@ -13,11 +13,15 @@ class SmsPreviewAdapter : ListAdapter<SmsEntry, SmsPreviewAdapter.ViewHolder>(DI
         RecyclerView.ViewHolder(binding.root) {
 
         fun bind(entry: SmsEntry) {
-            binding.tvSender.text  = entry.address.ifBlank { "Unknown" }
-            binding.tvBody.text    = entry.body.take(120).let {
-                if (entry.body.length > 120) "$it…" else it
+            binding.tvSender.text = if (entry.isSent) {
+                itemView.context.getString(R.string.sender_you)
+            } else {
+                entry.address.ifBlank { itemView.context.getString(R.string.sender_unknown) }
             }
-            binding.tvDate.text    = SmsHelper.formatDate(entry.dateMs)
+            binding.tvBody.text = entry.body.take(160).let {
+                if (entry.body.length > 160) "$it…" else it
+            }
+            binding.tvDate.text = SmsHelper.formatDate(entry.dateMs)
         }
     }
 
