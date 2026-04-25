@@ -3,6 +3,8 @@ package com.smsdelete.app
 import android.app.role.RoleManager
 import android.content.Context
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.MenuItem
 import android.view.View
 import android.widget.ArrayAdapter
@@ -57,7 +59,43 @@ class ConversationActivity : AppCompatActivity() {
         }
 
         setupDurationDropdown()
+        setupReplyBar()
         binding.btnDelete.setOnClickListener { confirmAndDelete() }
+    }
+
+    private fun setupReplyBar() {
+        binding.etReply.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                updateSendEnabled()
+            }
+        })
+        updateSendEnabled()
+        binding.btnSend.setOnClickListener { sendReply() }
+    }
+
+    private fun updateSendEnabled() {
+        binding.btnSend.isEnabled =
+            address.isNotBlank() && binding.etReply.text?.toString()?.isNotBlank() == true
+    }
+
+    private fun sendReply() {
+        val body = binding.etReply.text?.toString().orEmpty()
+        if (body.isBlank() || address.isBlank()) return
+        binding.btnSend.isEnabled = false
+        lifecycleScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                SmsHelper.sendSms(this@ConversationActivity, address, body)
+            }
+            if (ok) {
+                binding.etReply.text?.clear()
+                refreshPreview()
+            } else {
+                showToast(getString(R.string.send_failed))
+            }
+            updateSendEnabled()
+        }
     }
 
     override fun onResume() {
