@@ -59,4 +59,8 @@
     <string name="default_app_message">Android requires this app to temporarily become the default SMS app before it can delete messages.\n\nYou can switch back to your preferred app afterwards.</string>
 
     <string name="disclaimer">This app must temporarily become the default SMS app to delete messages. No messages are sent or read beyond what is shown above.</string>
+
+    <string name="reply_hint">Message</string>
+    <string name="send">Send</string>
+    <string name="send_failed">Failed to send message</string>
 </resources>

@@ -1,8 +1,11 @@
 package com.smsdelete.app
 
+import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.provider.Telephony
+import android.telephony.SmsManager
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -196,6 +199,43 @@ object SmsHelper {
 
     fun formatDate(ms: Long): String =
         SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()).format(Date(ms))
+
+    /**
+     * Sends [body] to [address] via [SmsManager] and writes the message to
+     * [Telephony.Sms.Sent] so it appears in the conversation immediately.
+     * Returns true on success, false if any step throws.
+     */
+    fun sendSms(context: Context, address: String, body: String): Boolean {
+        if (address.isBlank() || body.isBlank()) return false
+        return try {
+            val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                context.getSystemService(SmsManager::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                SmsManager.getDefault()
+            }
+            val parts = smsManager.divideMessage(body)
+            if (parts != null && parts.size > 1) {
+                smsManager.sendMultipartTextMessage(address, null, parts, null, null)
+            } else {
+                smsManager.sendTextMessage(address, null, body, null, null)
+            }
+
+            val threadId = Telephony.Threads.getOrCreateThreadId(context, address)
+            val values = ContentValues().apply {
+                put(Telephony.Sms.ADDRESS, address)
+                put(Telephony.Sms.BODY, body)
+                put(Telephony.Sms.DATE, System.currentTimeMillis())
+                put(Telephony.Sms.READ, 1)
+                put(Telephony.Sms.SEEN, 1)
+                put(Telephony.Sms.THREAD_ID, threadId)
+            }
+            context.contentResolver.insert(Telephony.Sms.Sent.CONTENT_URI, values)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
