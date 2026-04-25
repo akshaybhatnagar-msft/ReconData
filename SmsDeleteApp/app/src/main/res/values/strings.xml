@@ -66,4 +66,9 @@
 
     <string name="notif_channel_name">Messages</string>
     <string name="notif_channel_desc">Incoming SMS</string>
+
+    <string name="compose_title">New message</string>
+    <string name="recipient_hint">To</string>
+    <string name="body_hint">Message</string>
+    <string name="recipient_required">Recipient required</string>
 </resources>

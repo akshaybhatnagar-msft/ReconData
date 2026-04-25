@@ -68,6 +68,10 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnPickContact.setOnClickListener { pickPhone.launch(Unit) }
 
+        binding.fabCompose.setOnClickListener {
+            startActivity(Intent(this, ComposeActivity::class.java))
+        }
+
         checkAndRequestPermissions()
     }
 
