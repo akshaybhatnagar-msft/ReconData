@@ -18,35 +18,38 @@ class ThreadListAdapter(
         RecyclerView.ViewHolder(binding.root) {
 
         fun bind(thread: ThreadSummary) {
+            val isUnread = thread.unreadCount > 0
+            val titleStyle = if (isUnread) Typeface.BOLD else Typeface.NORMAL
+
+            binding.tvAvatar.text = Avatars.initial(thread.displayName)
+            binding.tvAvatar.background =
+                Avatars.circleDrawable(Avatars.colorFor(thread.address.ifBlank { thread.displayName }))
+
             binding.tvAddress.text = thread.displayName
-            binding.tvAddress.setTypeface(
-                null,
-                if (thread.unreadCount > 0) Typeface.BOLD else Typeface.NORMAL
-            )
+            binding.tvAddress.setTypeface(null, titleStyle)
+
             if (thread.displayName != thread.address && thread.address.isNotBlank()) {
                 binding.tvSubAddress.visibility = View.VISIBLE
                 binding.tvSubAddress.text = thread.address
             } else {
                 binding.tvSubAddress.visibility = View.GONE
             }
+
             binding.tvLastBody.text = thread.lastBody.take(140).let {
                 if (thread.lastBody.length > 140) "$it…" else it
             }
-            binding.tvLastBody.setTypeface(
-                null,
-                if (thread.unreadCount > 0) Typeface.BOLD else Typeface.NORMAL
-            )
+            binding.tvLastBody.setTypeface(null, titleStyle)
+
             binding.tvLastDate.text = SmsHelper.formatDate(thread.lastDateMs)
-            binding.tvCount.text = itemView.resources.getQuantityString(
-                R.plurals.thread_message_count, thread.count, thread.count
-            )
-            if (thread.unreadCount > 0) {
+
+            if (isUnread) {
                 binding.tvUnread.visibility = View.VISIBLE
                 binding.tvUnread.text = if (thread.unreadCount > 99) "99+"
                                         else thread.unreadCount.toString()
             } else {
                 binding.tvUnread.visibility = View.GONE
             }
+
             binding.root.setOnClickListener { onClick(thread) }
             binding.root.setOnLongClickListener { onLongClick(thread); true }
         }

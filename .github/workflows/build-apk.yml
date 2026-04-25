@@ -64,7 +64,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "apk-build-${{ github.run_number }}" \
-            --title "SMS Delete APK — Build ${{ github.run_number }}" \
+            --title "Shay Message — Build ${{ github.run_number }}" \
             --notes "Built from \`${{ github.ref_name }}\` @ \`${{ github.sha }}\`" \
             --prerelease \
             "SmsDeleteApp/app/build/outputs/apk/debug/app-debug.apk#app-debug.apk"

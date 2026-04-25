@@ -88,6 +88,7 @@ class MainActivity : AppCompatActivity() {
         binding.fabCompose.setOnClickListener {
             startActivity(Intent(this, ComposeActivity::class.java))
         }
+        binding.swipeRefresh.setOnRefreshListener { refreshThreads() }
 
         checkAndRequestPermissions()
     }
@@ -130,13 +131,17 @@ class MainActivity : AppCompatActivity() {
                 PackageManager.PERMISSION_GRANTED
 
     private fun refreshThreads() {
-        if (!hasReadSmsPermission()) return
+        if (!hasReadSmsPermission()) {
+            binding.swipeRefresh.isRefreshing = false
+            return
+        }
         binding.progressBar.visibility = View.VISIBLE
         lifecycleScope.launch {
             val threads = withContext(Dispatchers.IO) {
                 SmsHelper.queryThreads(this@MainActivity)
             }
             binding.progressBar.visibility = View.GONE
+            binding.swipeRefresh.isRefreshing = false
             allThreads = threads
             applyFilter()
         }
