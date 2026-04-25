@@ -13,13 +13,16 @@ class SmsPreviewAdapter : ListAdapter<SmsEntry, SmsPreviewAdapter.ViewHolder>(DI
         RecyclerView.ViewHolder(binding.root) {
 
         fun bind(entry: SmsEntry) {
-            binding.tvSender.text = if (entry.isSent) {
-                itemView.context.getString(R.string.sender_you)
-            } else {
-                entry.address.ifBlank { itemView.context.getString(R.string.sender_unknown) }
+            val ctx = itemView.context
+            binding.tvSender.text = when {
+                entry.isSent           -> ctx.getString(R.string.sender_you)
+                entry.address.isNotBlank() -> entry.address
+                else                   -> ctx.getString(R.string.sender_them)
             }
-            binding.tvBody.text = entry.body.take(160).let {
-                if (entry.body.length > 160) "$it…" else it
+            val prefix = if (entry.isMms) "📎 " else ""
+            val body = entry.body
+            binding.tvBody.text = (prefix + body).take(160 + prefix.length).let {
+                if (body.length > 160) "$it…" else it
             }
             binding.tvDate.text = SmsHelper.formatDate(entry.dateMs)
         }
@@ -38,7 +41,8 @@ class SmsPreviewAdapter : ListAdapter<SmsEntry, SmsPreviewAdapter.ViewHolder>(DI
 
     companion object {
         private val DIFF = object : DiffUtil.ItemCallback<SmsEntry>() {
-            override fun areItemsTheSame(a: SmsEntry, b: SmsEntry) = a.id == b.id
+            override fun areItemsTheSame(a: SmsEntry, b: SmsEntry) =
+                a.id == b.id && a.isMms == b.isMms
             override fun areContentsTheSame(a: SmsEntry, b: SmsEntry) = a == b
         }
     }

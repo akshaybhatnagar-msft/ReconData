@@ -1,13 +1,19 @@
 package com.smsdelete.app
 
 import android.Manifest
+import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
+import android.provider.ContactsContract
+import android.telephony.PhoneNumberUtils
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.View
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -36,19 +42,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private val pickPhone = registerForActivityResult(PickPhoneNumber) { uri ->
+        if (uri != null) onPhonePicked(uri)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        threadAdapter = ThreadListAdapter { thread ->
-            startActivity(
-                Intent(this, ConversationActivity::class.java)
-                    .putExtra(ConversationActivity.EXTRA_THREAD_ID, thread.threadId)
-                    .putExtra(ConversationActivity.EXTRA_TITLE, thread.displayName)
-                    .putExtra(ConversationActivity.EXTRA_ADDRESS, thread.address)
-            )
-        }
+        threadAdapter = ThreadListAdapter { thread -> openThread(thread) }
         binding.rvThreads.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = threadAdapter
@@ -62,6 +65,8 @@ class MainActivity : AppCompatActivity() {
                 applyFilter()
             }
         })
+
+        binding.btnPickContact.setOnClickListener { pickPhone.launch(Unit) }
 
         checkAndRequestPermissions()
     }
@@ -111,16 +116,10 @@ class MainActivity : AppCompatActivity() {
         if (filtered.isEmpty()) {
             binding.tvEmpty.visibility = View.VISIBLE
             binding.rvThreads.visibility = View.GONE
-            binding.tvHeader.text = if (allThreads.isEmpty()) {
-                getString(R.string.no_conversations)
-            } else {
-                getString(R.string.no_match)
-            }
-            binding.tvEmpty.text = if (allThreads.isEmpty()) {
-                getString(R.string.no_conversations)
-            } else {
-                getString(R.string.no_match)
-            }
+            val msg = if (allThreads.isEmpty()) getString(R.string.no_conversations)
+                      else getString(R.string.no_match)
+            binding.tvHeader.text = msg
+            binding.tvEmpty.text = msg
         } else {
             binding.tvEmpty.visibility = View.GONE
             binding.rvThreads.visibility = View.VISIBLE
@@ -131,11 +130,54 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun openThread(thread: ThreadSummary) {
+        startActivity(
+            Intent(this, ConversationActivity::class.java)
+                .putExtra(ConversationActivity.EXTRA_THREAD_ID, thread.threadId)
+                .putExtra(ConversationActivity.EXTRA_TITLE, thread.displayName)
+                .putExtra(ConversationActivity.EXTRA_ADDRESS, thread.address)
+        )
+    }
+
+    /** Resolve picked contact URI to a phone number, then find a matching thread. */
+    private fun onPhonePicked(uri: Uri) {
+        val pickedNumber = contentResolver.query(
+            uri,
+            arrayOf(
+                ContactsContract.CommonDataKinds.Phone.NUMBER,
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME
+            ),
+            null, null, null
+        )?.use { c ->
+            if (c.moveToFirst()) c.getString(0) to (c.getString(1) ?: "") else null
+        } ?: return
+
+        val (number, name) = pickedNumber
+        if (number.isNullOrBlank()) return
+
+        val match = allThreads.firstOrNull { thread ->
+            try {
+                PhoneNumberUtils.compare(thread.address, number)
+            } catch (_: Exception) { false }
+        }
+        if (match != null) {
+            openThread(match)
+        } else {
+            showToast(getString(R.string.no_messages_for_contact, name.ifBlank { number }))
+        }
+    }
+
     private fun showToast(msg: String) =
         Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
 
+    private object PickPhoneNumber : ActivityResultContract<Unit, Uri?>() {
+        override fun createIntent(context: Context, input: Unit): Intent =
+            Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)
+        override fun parseResult(resultCode: Int, intent: Intent?): Uri? =
+            if (resultCode == Activity.RESULT_OK) intent?.data else null
+    }
+
     companion object {
-        // READ_CONTACTS isn't strictly required, but resolving names needs it on most devices.
         private val REQUIRED_PERMISSIONS = arrayOf(
             Manifest.permission.READ_SMS,
             Manifest.permission.RECEIVE_SMS,

@@ -16,7 +16,10 @@
     <string name="no_messages_in_window">No messages in this time window</string>
     <string name="read_perm_required">SMS read permission is required to scan messages.</string>
     <string name="sender_you">You</string>
+    <string name="sender_them">Them</string>
     <string name="sender_unknown">Unknown</string>
+    <string name="pick_contact">Search contacts</string>
+    <string name="no_messages_for_contact">No messages found for %1$s</string>
     <string name="default_app_required">Default SMS app permission is needed to delete messages.</string>
 
     <plurals name="messages_found">
