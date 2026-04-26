@@ -36,8 +36,11 @@
             android:id="@+id/tvBody"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:autoLink="web|email|phone"
+            android:linksClickable="true"
             android:textAppearance="?attr/textAppearanceBodyMedium"
-            android:textColor="?attr/colorOnPrimaryContainer" />
+            android:textColor="?attr/colorOnPrimaryContainer"
+            android:textColorLink="?attr/colorPrimary" />
 
         <LinearLayout
             android:layout_width="wrap_content"
