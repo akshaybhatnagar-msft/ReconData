@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Shay Message</string>
+    <string name="app_name">Messages</string>
     <string name="threads_subtitle">Your conversations</string>
     <string name="select_window">Delete messages from the past…</string>
 
@@ -39,8 +39,8 @@
 
     <string name="settings_title">Settings</string>
     <string name="default_app_section">Default SMS app</string>
-    <string name="default_app_held">Shay Message is your default SMS app.</string>
-    <string name="default_app_not_held">Shay Message is not your default SMS app. Set it as default to send and delete messages.</string>
+    <string name="default_app_held">Messages is your default SMS app.</string>
+    <string name="default_app_not_held">Messages is not your default SMS app. Set it as default to send and delete messages.</string>
     <string name="make_default">Set as default</string>
     <string name="about_section">About</string>
     <string name="version_label">Version %1$s</string>
